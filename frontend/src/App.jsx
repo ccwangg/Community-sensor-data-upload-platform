@@ -41,22 +41,37 @@ const useEcharts = (options, chartId) => {
     }, [chartId]);
     
     useEffect(() => {
-        if (chartInstance.current && options && Object.keys(options).length > 0) {
+        if (chartInstance.current && options) {
             try {
-                chartInstance.current.setOption(options, true);
+                // 確保選項有效（即使數據為空也要顯示圖表框架）
+                const validOptions = options && Object.keys(options).length > 0 
+                    ? options 
+                    : {
+                        title: { 
+                            text: '暫無數據', 
+                            textStyle: { color: '#9CA3AF' }, 
+                            left: 'center', 
+                            top: 'center' 
+                        },
+                        xAxis: { type: 'category', data: [] },
+                        yAxis: { type: 'value' },
+                        series: []
+                    };
+                
+                chartInstance.current.setOption(validOptions, true);
                 chartInstance.current.resize();
             } catch (error) {
-                console.error("ECharts setOption 失敗:", error);
+                console.error("ECharts setOption 失敗:", error, "chartId:", chartId);
             }
         }
-    }, [options]);
+    }, [options, chartId]);
     
     return chartRef;
 };
 
 // --- ECharts 選項生成函數：PM2.5 趨勢圖 ---
 const createPm25TrendOptions = (readings) => {
-    const displayReadings = readings.slice(-15); 
+    const displayReadings = readings && readings.length > 0 ? readings.slice(-15) : []; 
     const timestamps = displayReadings.map(r => 
         r.timestamp ? new Date(r.timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '載入中...'
     );
@@ -111,7 +126,7 @@ const createPm25TrendOptions = (readings) => {
 
 // --- ECharts 選項生成函數：溫度與濕度比較圖 ---
 const createTempHumidityOptions = (readings) => {
-    const displayReadings = readings.slice(-10);
+    const displayReadings = readings && readings.length > 0 ? readings.slice(-10) : [];
     const timestamps = displayReadings.map(r => 
         r.timestamp ? new Date(r.timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '載入中...'
     );
@@ -164,7 +179,7 @@ const createTempHumidityOptions = (readings) => {
 
 // --- ECharts 選項生成函數：氣壓趨勢圖 ---
 const createPressureTrendOptions = (readings) => {
-    const displayReadings = readings.slice(-15);
+    const displayReadings = readings && readings.length > 0 ? readings.slice(-15) : [];
     const timestamps = displayReadings.map(r => 
         r.timestamp ? new Date(r.timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '載入中...'
     );
@@ -207,7 +222,7 @@ const createPressureTrendOptions = (readings) => {
 
 // --- ECharts 選項生成函數：噪音趨勢圖 ---
 const createNoiseTrendOptions = (readings) => {
-    const displayReadings = readings.slice(-15); 
+    const displayReadings = readings && readings.length > 0 ? readings.slice(-15) : []; 
     const timestamps = displayReadings.map(r => 
         r.timestamp ? new Date(r.timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '載入中...'
     );
@@ -250,7 +265,7 @@ const createNoiseTrendOptions = (readings) => {
 
 // --- ECharts 選項生成函數：風速與風向圖 ---
 const createWindOptions = (readings) => {
-    const displayReadings = readings.slice(-10);
+    const displayReadings = readings && readings.length > 0 ? readings.slice(-10) : [];
     const timestamps = displayReadings.map(r => 
         r.timestamp ? new Date(r.timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '載入中...'
     );
@@ -518,10 +533,16 @@ const App = () => {
                 if (dataResponse.ok) {
                     const dataResult = await dataResponse.json();
                     if (dataResult.success) {
-                        setReadings(dataResult.data || []);
+                        const readingsData = dataResult.data || [];
+                        console.log('載入數據成功，筆數:', readingsData.length);
+                        setReadings(readingsData);
+                    } else {
+                        console.warn('數據載入回應成功但 success 為 false:', dataResult);
+                        setReadings([]);
                     }
                 } else {
                     console.error('載入數據失敗:', dataResponse.status, dataResponse.statusText);
+                    setReadings([]);
                 }
 
                 if (summaryResponse.ok) {
@@ -765,7 +786,7 @@ const ChartContainer = ({ options, id, title }) => {
 
 // --- 輔助 UI 元件：最新數據列表 ---
 const LatestDataList = ({ readings }) => {
-    const latestFive = readings.slice(-5).reverse(); 
+    const latestFive = readings && readings.length > 0 ? readings.slice(-5).reverse() : []; 
 
     if (latestFive.length === 0) {
         return (
