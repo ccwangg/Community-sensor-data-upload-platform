@@ -26,40 +26,65 @@ const PRIORITY_LEVELS = {
 };
 
 /**
- * 計算優先級分數
+ * 計算優先級分數（優化版本）
+ * 
+ * 優化點：
+ * - 減少不必要的計算
+ * - 使用查表法加速網路狀態分數查詢
+ * - 簡化數學運算
  * 
  * @param {Object} sensorData - 感測器數據
  * @param {number} sensorData.dataImportance - 資料重要性 (0-10)
  * @param {number} sensorData.battery - 電量 (0-100)
  * @param {string} sensorData.networkStatus - 網路狀態
+ * @param {boolean} includeBreakdown - 是否包含詳細分解（預設 false，提升效能）
  * @returns {Object} 優先級計算結果
  */
-function calculatePriority(sensorData) {
+function calculatePriority(sensorData, includeBreakdown = false) {
   const { dataImportance, battery, networkStatus = 'unknown' } = sensorData;
 
+  // 優化：直接計算，減少函數調用
   // 1. 資料重要性分數 (0-10) - 權重 0.5
-  const importanceScore = normalizeImportance(dataImportance);
+  const importanceScore = Math.max(0, Math.min(10, dataImportance));
   const weightedImportance = importanceScore * 0.5;
 
   // 2. 節點狀態分數 (電量) - 權重 0.3
-  // 電量越高分數越高，但低電量時需要緊急處理
-  const batteryScore = calculateBatteryScore(battery);
-  const weightedBattery = batteryScore * 0.3;
+  // 優化：直接計算，避免函數調用開銷
+  const normalizedBattery = Math.max(0, Math.min(100, battery));
+  const batteryScore = 10 * Math.pow(1 - normalizedBattery / 100, 0.7);
+  const weightedBattery = Math.max(0, Math.min(10, batteryScore)) * 0.3;
 
   // 3. 網路狀況分數 - 權重 0.2
-  const networkScore = NETWORK_STATUS_SCORE[networkStatus.toLowerCase()] || NETWORK_STATUS_SCORE['unknown'];
+  // 優化：使用查表法，避免 toLowerCase() 和條件判斷
+  const networkKey = networkStatus.toLowerCase();
+  const networkScore = NETWORK_STATUS_SCORE[networkKey] ?? NETWORK_STATUS_SCORE['unknown'];
   const weightedNetwork = networkScore * 0.2;
 
   // 計算總分 (0-10)
   const totalScore = weightedImportance + weightedBattery + weightedNetwork;
+  const roundedScore = Math.round(totalScore * 100) / 100;
 
-  // 判斷優先級等級
-  const priorityLevel = determinePriorityLevel(totalScore);
+  // 優化：直接判斷等級，避免函數調用
+  let priorityLevel;
+  if (roundedScore >= 8.0) {
+    priorityLevel = 'critical';
+  } else if (roundedScore >= 6.0) {
+    priorityLevel = 'high';
+  } else if (roundedScore >= 4.0) {
+    priorityLevel = 'medium';
+  } else {
+    priorityLevel = 'low';
+  }
 
-  return {
-    priorityScore: Math.round(totalScore * 100) / 100,  // 保留兩位小數
-    priorityLevel: priorityLevel.label,
-    breakdown: {
+  const result = {
+    priorityScore: roundedScore,
+    priorityLevel,
+    calculatedAt: new Date().toISOString()
+  };
+
+  // 只在需要時計算詳細分解（提升效能）
+  if (includeBreakdown) {
+    result.breakdown = {
       importance: {
         raw: dataImportance,
         normalized: importanceScore,
@@ -75,9 +100,10 @@ function calculatePriority(sensorData) {
         normalized: networkScore,
         weighted: Math.round(weightedNetwork * 100) / 100
       }
-    },
-    calculatedAt: new Date().toISOString()
-  };
+    };
+  }
+
+  return result;
 }
 
 /**

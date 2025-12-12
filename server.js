@@ -6,6 +6,7 @@ require('dotenv').config();
 const sensorRoutes = require('./routes/sensorRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const schedulerRoutes = require('./routes/schedulerRoutes');
+const { performanceMonitor, getPerformanceStats, resetStats } = require('./middleware/performanceMonitor');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,6 +15,9 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// 效能監控中間件（必須在其他中間件之前）
+app.use(performanceMonitor);
 
 // 請求日誌中間件
 app.use((req, res, next) => {
@@ -60,6 +64,28 @@ app.get('/health', (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
+  });
+});
+
+// 效能統計端點
+app.get('/api/performance/stats', (req, res) => {
+  const cacheService = require('./services/cacheService');
+  const asyncProcessor = require('./services/asyncProcessor');
+  
+  res.json({
+    success: true,
+    performance: getPerformanceStats(),
+    cache: cacheService.getStats(),
+    asyncQueue: asyncProcessor.getQueueStatus()
+  });
+});
+
+// 重置效能統計
+app.post('/api/performance/reset', (req, res) => {
+  resetStats();
+  res.json({
+    success: true,
+    message: '效能統計已重置'
   });
 });
 

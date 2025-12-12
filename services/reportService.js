@@ -1,54 +1,66 @@
 const sensorService = require('./sensorService');
+const cacheService = require('./cacheService');
 
 /**
- * 獲取數據摘要報表
+ * 獲取數據摘要報表（使用快取優化）
  */
 const getSummary = async () => {
+  const cacheKey = cacheService.generateKey('summary', {});
+  
+  // 嘗試從快取獲取
+  const cached = cacheService.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const allData = await sensorService.getAllSensorData();
   const data = allData.data;
 
   if (data.length === 0) {
-    return {
+    const result = {
       totalRecords: 0,
       message: '目前尚無數據'
     };
+    cacheService.set(cacheKey, result, 60 * 1000);
+    return result;
   }
 
-  // 統計節點數量
-  const uniqueNodes = new Set(data.map(d => d.nodeId));
-  
-  // 統計感測器類型
+  // 優化：使用單次遍歷計算所有統計
+  const uniqueNodes = new Set();
   const sensorTypes = {};
-  data.forEach(d => {
-    sensorTypes[d.sensorType] = (sensorTypes[d.sensorType] || 0) + 1;
-  });
-
-  // 計算平均電量
-  const avgBattery = data.reduce((sum, d) => sum + d.battery, 0) / data.length;
-
-  // 計算平均資料重要性
-  const avgImportance = data.reduce((sum, d) => sum + d.dataImportance, 0) / data.length;
-
-  // 網路狀態統計
+  let totalBattery = 0;
+  let totalImportance = 0;
   const networkStatus = {};
-  data.forEach(d => {
+  let latestTimestamp = null;
+
+  for (const d of data) {
+    uniqueNodes.add(d.nodeId);
+    sensorTypes[d.sensorType] = (sensorTypes[d.sensorType] || 0) + 1;
+    totalBattery += d.battery;
+    totalImportance += d.dataImportance;
     networkStatus[d.networkStatus] = (networkStatus[d.networkStatus] || 0) + 1;
-  });
+    
+    if (!latestTimestamp || d.timestamp > latestTimestamp) {
+      latestTimestamp = d.timestamp;
+    }
+  }
 
-  // 最新數據時間
-  const latestTimestamp = data[0]?.timestamp || null;
-
-  return {
+  const result = {
     totalRecords: data.length,
     uniqueNodes: uniqueNodes.size,
     nodeList: Array.from(uniqueNodes),
     sensorTypes,
-    averageBattery: Math.round(avgBattery * 100) / 100,
-    averageImportance: Math.round(avgImportance * 100) / 100,
+    averageBattery: Math.round((totalBattery / data.length) * 100) / 100,
+    averageImportance: Math.round((totalImportance / data.length) * 100) / 100,
     networkStatus,
     latestTimestamp,
     generatedAt: new Date().toISOString()
   };
+
+  // 存入快取（TTL: 30 秒）
+  cacheService.set(cacheKey, result, 30 * 1000);
+
+  return result;
 };
 
 /**
