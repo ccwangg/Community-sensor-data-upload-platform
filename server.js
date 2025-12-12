@@ -5,6 +5,7 @@ require('dotenv').config();
 
 const sensorRoutes = require('./routes/sensorRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const schedulerRoutes = require('./routes/schedulerRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,6 +24,7 @@ app.use((req, res, next) => {
 // API 路由
 app.use('/api/sensors', sensorRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/scheduler', schedulerRoutes);
 
 // 根路徑
 app.get('/', (req, res) => {
@@ -38,6 +40,15 @@ app.get('/', (req, res) => {
       reports: {
         summary: 'GET /api/reports/summary',
         statistics: 'GET /api/reports/statistics'
+      },
+      scheduler: {
+        queueStatus: 'GET /api/scheduler/queue',
+        processCritical: 'POST /api/scheduler/process-critical',
+        processBatch: 'POST /api/scheduler/process-batch',
+        clearQueues: 'DELETE /api/scheduler/queue'
+      },
+      priority: {
+        stats: 'GET /api/sensors/priority/stats'
       }
     }
   });

@@ -279,6 +279,91 @@ async function runTests() {
     failed++;
   }
 
+  // 測試 13: 優先級引擎 - 上傳高優先級數據
+  console.log('測試 13: 優先級引擎 - 上傳高優先級數據');
+  try {
+    const sensorData = {
+      nodeId: 'node-priority-001',
+      dataImportance: 9,  // 高重要性
+      battery: 15,        // 低電量（會提高優先級）
+      networkStatus: 'good',
+      sensorType: 'temperature',
+      value: 30.5
+    };
+    const response = await makeRequest('POST', '/api/sensors/data', sensorData);
+    if (response.status === 201 && response.data.data.priority) {
+      console.log('✅ 通過');
+      console.log('   - 優先級分數:', response.data.data.priority.priorityScore);
+      console.log('   - 優先級等級:', response.data.data.priority.priorityLevel);
+      console.log('');
+      passed++;
+    } else {
+      console.log('❌ 失敗:', response);
+      failed++;
+    }
+  } catch (error) {
+    console.log('❌ 失敗:', error.message);
+    failed++;
+  }
+
+  // 測試 14: 優先級統計
+  console.log('測試 14: 獲取優先級統計');
+  try {
+    const response = await makeRequest('GET', '/api/sensors/priority/stats');
+    if (response.status === 200 && response.data.success && response.data.data.total !== undefined) {
+      console.log('✅ 通過');
+      console.log('   - 總數據數:', response.data.data.total);
+      console.log('   - 平均優先級分數:', response.data.data.averageScore?.toFixed(2));
+      console.log('');
+      passed++;
+    } else {
+      console.log('❌ 失敗:', response);
+      failed++;
+    }
+  } catch (error) {
+    console.log('❌ 失敗:', error.message);
+    failed++;
+  }
+
+  // 測試 15: 按優先級排序查詢
+  console.log('測試 15: 按優先級排序查詢');
+  try {
+    const response = await makeRequest('GET', '/api/sensors/data?sortBy=priority&limit=5');
+    if (response.status === 200 && response.data.success) {
+      console.log('✅ 通過');
+      if (response.data.data.length > 0) {
+        console.log('   - 最高優先級分數:', response.data.data[0].priority?.priorityScore);
+      }
+      console.log('');
+      passed++;
+    } else {
+      console.log('❌ 失敗:', response);
+      failed++;
+    }
+  } catch (error) {
+    console.log('❌ 失敗:', error.message);
+    failed++;
+  }
+
+  // 測試 16: 獲取上傳佇列狀態
+  console.log('測試 16: 獲取上傳佇列狀態');
+  try {
+    const response = await makeRequest('GET', '/api/scheduler/queue');
+    if (response.status === 200 && response.data.success) {
+      console.log('✅ 通過');
+      console.log('   - 緊急佇列數量:', response.data.data.critical.count);
+      console.log('   - 批次佇列數量:', response.data.data.batch.count);
+      console.log('');
+      passed++;
+    } else {
+      console.log('❌ 失敗:', response);
+      failed++;
+    }
+  } catch (error) {
+    console.log('❌ 失敗:', error.message);
+    failed++;
+  }
+
   // 測試結果總結
   console.log('='.repeat(50));
   console.log('📊 測試結果總結');

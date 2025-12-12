@@ -297,68 +297,103 @@ if __name__ == "__main__":
     import sys
     import argparse
     
-    # 使用 argparse 解析命令行參數
-    parser = argparse.ArgumentParser(
-        description='感測器數據模擬器 - 自動生成並發送數據到後端 API',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+    # 檢查是否使用舊格式（位置參數）
+    scenario = "baseline"
+    backend_url = None
+    continuous = False
+    duration = None
+    sensors_n = 5
+    per_sensor_msg = 3
+    interval = 0.5
+    
+    # 向後兼容：檢查是否有位置參數（舊格式）
+    if len(sys.argv) > 1 and not sys.argv[1].startswith('-'):
+        # 舊格式：python simulator_backend.py baseline [backend_url]
+        scenario = sys.argv[1]
+        if len(sys.argv) > 2 and not sys.argv[2].startswith('-'):
+            backend_url = sys.argv[2]
+        
+        # 使用舊格式的預設值
+        print("⚠️  使用舊格式參數，建議使用新格式：")
+        print("   python simulator_backend.py --scenario baseline --continuous")
+        print()
+        
+        main(
+            sensors_n=sensors_n,
+            per_sensor_msg=per_sensor_msg,
+            interval=interval,
+            scenario=scenario,
+            backend_url=backend_url,
+            continuous=continuous,
+            duration=duration
+        )
+    else:
+        # 新格式：使用 argparse
+        parser = argparse.ArgumentParser(
+            description='感測器數據模擬器 - 自動生成並發送數據到後端 API',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog="""
 使用範例:
-  # 持續運行模式（無限）
+  # 持續運行模式（無限）- 推薦
   python simulator_backend.py --continuous
   
   # 持續運行 60 秒
   python simulator_backend.py --continuous --duration 60
   
-  # 固定數量模式（預設）
+  # 固定數量模式
   python simulator_backend.py --sensors 5 --messages 10
   
   # 指定場景和後端 URL
   python simulator_backend.py --scenario heavy --backend http://localhost:3000 --continuous
-        """
-    )
-    
-    parser.add_argument('--scenario', '-s', 
-                       default='baseline',
-                       choices=['baseline', 'heavy', 'spike'],
-                       help='測試場景 (預設: baseline)')
-    
-    parser.add_argument('--backend', '-b',
-                       default=None,
-                       help='後端 URL (預設: http://localhost:3000)')
-    
-    parser.add_argument('--sensors', '-n',
-                       type=int,
-                       default=5,
-                       help='感測器數量 (預設: 5)')
-    
-    parser.add_argument('--messages', '-m',
-                       type=int,
-                       default=3,
-                       help='每個感測器發送的訊息數（僅固定模式，預設: 3)')
-    
-    parser.add_argument('--interval', '-i',
-                       type=float,
-                       default=0.5,
-                       help='發送間隔（秒，預設: 0.5)')
-    
-    parser.add_argument('--continuous', '-c',
-                       action='store_true',
-                       help='持續運行模式（自動生成數據，無限運行）')
-    
-    parser.add_argument('--duration', '-d',
-                       type=int,
-                       default=None,
-                       help='持續運行時間（秒），僅在 --continuous 模式下有效')
-    
-    args = parser.parse_args()
-    
-    main(
-        sensors_n=args.sensors,
-        per_sensor_msg=args.messages,
-        interval=args.interval,
-        scenario=args.scenario,
-        backend_url=args.backend,
-        continuous=args.continuous,
-        duration=args.duration
-    )
+  
+  # 舊格式（向後兼容）
+  python simulator_backend.py baseline
+  python simulator_backend.py heavy http://localhost:3000
+            """
+        )
+        
+        parser.add_argument('--scenario', '-s', 
+                           default='baseline',
+                           choices=['baseline', 'heavy', 'spike'],
+                           help='測試場景 (預設: baseline)')
+        
+        parser.add_argument('--backend', '-b',
+                           default=None,
+                           help='後端 URL (預設: http://localhost:3000)')
+        
+        parser.add_argument('--sensors', '-n',
+                           type=int,
+                           default=5,
+                           help='感測器數量 (預設: 5)')
+        
+        parser.add_argument('--messages', '-m',
+                           type=int,
+                           default=3,
+                           help='每個感測器發送的訊息數（僅固定模式，預設: 3)')
+        
+        parser.add_argument('--interval', '-i',
+                           type=float,
+                           default=0.5,
+                           help='發送間隔（秒，預設: 0.5)')
+        
+        parser.add_argument('--continuous', '-c',
+                           action='store_true',
+                           help='持續運行模式（自動生成數據，無限運行）')
+        
+        parser.add_argument('--duration', '-d',
+                           type=int,
+                           default=None,
+                           help='持續運行時間（秒），僅在 --continuous 模式下有效')
+        
+        args = parser.parse_args()
+        
+        main(
+            sensors_n=args.sensors,
+            per_sensor_msg=args.messages,
+            interval=args.interval,
+            scenario=args.scenario,
+            backend_url=args.backend,
+            continuous=args.continuous,
+            duration=args.duration
+        )
 

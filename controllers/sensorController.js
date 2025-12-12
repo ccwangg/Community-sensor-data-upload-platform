@@ -27,22 +27,45 @@ const uploadSensorData = async (req, res, next) => {
       sensorType,
       value,
       unit,
-      metadata
+      metadata,
+      // 模擬器格式支援
+      sensor_id,           // 模擬器的 sensor_id 對應到 nodeId
+      priority_hint,       // 模擬器的 priority_hint
+      ts,                  // 模擬器的 ts 對應到 timestamp
+      periodic,            // 模擬器的週期性數據
+      emergency,           // 模擬器的緊急事件數據
+      meta                 // 模擬器的 meta 對應到 metadata
     } = req.body;
 
+    // 支援模擬器格式：如果使用模擬器格式，進行轉換
+    let finalNodeId = nodeId || sensor_id;
+    let finalDataImportance = dataImportance;
+    let finalTimestamp = timestamp || ts;
+    let finalMetadata = metadata || meta || {};
+    let finalPeriodic = periodic;
+    let finalEmergency = emergency;
+
+    // 如果使用模擬器格式的 priority_hint，轉換 severity 到 dataImportance
+    if (priority_hint && priority_hint.severity !== undefined) {
+      // 模擬器的 severity 是 0.1-1.0，轉換為 1-10
+      finalDataImportance = priority_hint.severity * 10;
+    }
+
     // 驗證必填欄位
-    if (!nodeId || dataImportance === undefined || battery === undefined) {
+    if (!finalNodeId || finalDataImportance === undefined || battery === undefined) {
       return res.status(400).json({
+        success: false,
         error: {
-          message: '缺少必填欄位：nodeId, dataImportance, battery 為必填',
-          required: ['nodeId', 'dataImportance', 'battery']
+          message: '缺少必填欄位：nodeId (或 sensor_id), dataImportance (或 priority_hint.severity), battery 為必填',
+          required: ['nodeId/sensor_id', 'dataImportance/priority_hint.severity', 'battery']
         }
       });
     }
 
     // 驗證資料格式
-    if (typeof dataImportance !== 'number' || dataImportance < 0 || dataImportance > 10) {
+    if (typeof finalDataImportance !== 'number' || finalDataImportance < 0 || finalDataImportance > 10) {
       return res.status(400).json({
+        success: false,
         error: {
           message: 'dataImportance 必須是 0-10 之間的數字'
         }
@@ -51,23 +74,48 @@ const uploadSensorData = async (req, res, next) => {
 
     if (typeof battery !== 'number' || battery < 0 || battery > 100) {
       return res.status(400).json({
+        success: false,
         error: {
           message: 'battery 必須是 0-100 之間的數字'
         }
       });
     }
 
+    // 從 periodic 數據中推斷 sensorType 和 value（如果未提供）
+    let finalSensorType = sensorType;
+    let finalValue = value;
+    let finalUnit = unit;
+
+    if (periodic && !sensorType) {
+      // 根據 periodic 數據推斷主要感測器類型
+      if (periodic.temperature !== undefined) {
+        finalSensorType = 'temperature';
+        finalValue = periodic.temperature;
+        finalUnit = 'celsius';
+      } else if (periodic.humidity !== undefined) {
+        finalSensorType = 'humidity';
+        finalValue = periodic.humidity;
+        finalUnit = 'percent';
+      } else if (periodic.pressure !== undefined) {
+        finalSensorType = 'pressure';
+        finalValue = periodic.pressure;
+        finalUnit = 'hPa';
+      }
+    }
+
     // 建立感測器數據物件
     const sensorData = {
-      nodeId,
-      dataImportance,
+      nodeId: finalNodeId,
+      dataImportance: finalDataImportance,
       battery,
-      timestamp: timestamp || new Date().toISOString(),
-      networkStatus: networkStatus || 'unknown',
-      sensorType: sensorType || 'unknown',
-      value: value !== undefined ? value : null,
-      unit: unit || null,
-      metadata: metadata || {},
+      timestamp: finalTimestamp || new Date().toISOString(),
+      networkStatus: networkStatus || 'good',  // 預設為 good
+      sensorType: finalSensorType || 'unknown',
+      value: finalValue !== undefined ? finalValue : null,
+      unit: finalUnit || null,
+      periodic: finalPeriodic || null,
+      emergency: finalEmergency || null,
+      metadata: finalMetadata,
       receivedAt: new Date().toISOString()
     };
 
@@ -93,16 +141,22 @@ const uploadSensorData = async (req, res, next) => {
  * - offset: 偏移量
  * - nodeId: 篩選特定節點
  * - sensorType: 篩選特定感測器類型
+ * - priorityLevel: 篩選優先級等級 (critical, high, medium, low)
+ * - minPriorityScore: 最小優先級分數 (0-10)
+ * - sortBy: 排序方式 (priority, timestamp)
  */
 const getAllSensorData = async (req, res, next) => {
   try {
-    const { limit, offset, nodeId, sensorType } = req.query;
+    const { limit, offset, nodeId, sensorType, priorityLevel, minPriorityScore, sortBy } = req.query;
 
     const options = {
       limit: limit ? parseInt(limit) : undefined,
       offset: offset ? parseInt(offset) : 0,
       nodeId,
-      sensorType
+      sensorType,
+      priorityLevel,
+      minPriorityScore,
+      sortBy: sortBy || 'timestamp'
     };
 
     const result = await sensorService.getAllSensorData(options);
@@ -174,10 +228,27 @@ const getDataByNodeId = async (req, res, next) => {
   }
 };
 
+/**
+ * 獲取優先級統計
+ * GET /api/sensors/priority/stats
+ */
+const getPriorityStatistics = async (req, res, next) => {
+  try {
+    const stats = await sensorService.getPriorityStatistics();
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   uploadSensorData,
   getAllSensorData,
   getSensorDataById,
-  getDataByNodeId
+  getDataByNodeId,
+  getPriorityStatistics
 };
 

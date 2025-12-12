@@ -14,5 +14,8 @@ router.get('/data/:id', sensorController.getSensorDataById);
 // 根據節點 ID 獲取數據
 router.get('/node/:nodeId', sensorController.getDataByNodeId);
 
+// 獲取優先級統計
+router.get('/priority/stats', sensorController.getPriorityStatistics);
+
 module.exports = router;
 
