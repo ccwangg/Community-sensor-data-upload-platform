@@ -71,7 +71,7 @@ const uploadSensorData = async (req, res, next) => {
       receivedAt: new Date().toISOString()
     };
 
-    // 儲存數據（目前使用記憶體儲存，第二階段會加入資料庫）
+    // 儲存數據（會經過優先級引擎處理，並存入資料庫）
     const savedData = await sensorService.saveSensorData(sensorData);
 
     res.status(201).json({

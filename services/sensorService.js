@@ -1,61 +1,38 @@
-// 暫時使用記憶體儲存，第二階段會改為資料庫
-const sensorDataStore = [];
-let nextId = 1;
+// 使用資料庫服務和優先級引擎
+const databaseService = require('./databaseService');
+const priorityEngine = require('./priorityEngine');
 
 /**
- * 儲存感測器數據
+ * 儲存感測器數據（整合優先級引擎）
  */
 const saveSensorData = async (sensorData) => {
-  const dataWithId = {
-    id: `sensor-${nextId++}`,
+  // 計算優先級
+  const priority = priorityEngine.calculatePriority(sensorData);
+  
+  // 將優先級資訊加入數據
+  const dataWithPriority = {
     ...sensorData,
-    createdAt: new Date().toISOString()
+    priority
   };
   
-  sensorDataStore.push(dataWithId);
-  return dataWithId;
+  // 儲存到資料庫（資料庫服務會按優先級排序插入）
+  const savedData = databaseService.saveSensorData(dataWithPriority);
+  
+  return savedData;
 };
 
 /**
- * 獲取所有感測器數據
+ * 獲取所有感測器數據（從資料庫讀取）
  */
 const getAllSensorData = async (options = {}) => {
-  let filteredData = [...sensorDataStore];
-
-  // 根據 nodeId 篩選
-  if (options.nodeId) {
-    filteredData = filteredData.filter(data => data.nodeId === options.nodeId);
-  }
-
-  // 根據 sensorType 篩選
-  if (options.sensorType) {
-    filteredData = filteredData.filter(data => data.sensorType === options.sensorType);
-  }
-
-  // 排序：最新的在前
-  filteredData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-  const total = filteredData.length;
-
-  // 分頁處理
-  if (options.offset) {
-    filteredData = filteredData.slice(options.offset);
-  }
-  if (options.limit) {
-    filteredData = filteredData.slice(0, options.limit);
-  }
-
-  return {
-    data: filteredData,
-    total
-  };
+  return databaseService.getAllSensorData(options);
 };
 
 /**
- * 根據 ID 獲取感測器數據
+ * 根據 ID 獲取感測器數據（從資料庫讀取）
  */
 const getSensorDataById = async (id) => {
-  return sensorDataStore.find(data => data.id === id);
+  return databaseService.getSensorDataById(id);
 };
 
 module.exports = {

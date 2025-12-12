@@ -1,0 +1,679 @@
+import React, { useState, useEffect, useRef } from 'react';
+import * as echarts from 'echarts';
+
+// 後端 API 設定
+const API_BASE_URL = 'http://localhost:3000';
+
+// --- ECharts React Hook ---
+const useEcharts = (options, chartId) => {
+    const chartRef = useRef(null);
+    const chartInstance = useRef(null);
+
+    useEffect(() => {
+        if (!chartRef.current) return;
+
+        if (chartInstance.current) {
+            try { echarts.dispose(chartInstance.current); } catch (e) {}
+        }
+        
+        try {
+            chartInstance.current = echarts.init(chartRef.current, 'dark');
+        } catch (error) {
+            console.error("ECharts 初始化失敗:", error);
+            return;
+        }
+
+        const resizeChart = () => {
+            if (chartInstance.current) {
+                chartInstance.current.resize();
+            }
+        };
+
+        window.addEventListener('resize', resizeChart);
+
+        return () => {
+            window.removeEventListener('resize', resizeChart);
+            if (chartInstance.current) {
+                try { echarts.dispose(chartInstance.current); } catch (e) {}
+                chartInstance.current = null;
+            }
+        };
+    }, [chartId]);
+    
+    useEffect(() => {
+        if (chartInstance.current && options && Object.keys(options).length > 0) {
+            try {
+                chartInstance.current.setOption(options, true);
+                chartInstance.current.resize();
+            } catch (error) {
+                console.error("ECharts setOption 失敗:", error);
+            }
+        }
+    }, [options]);
+    
+    return chartRef;
+};
+
+// --- ECharts 選項生成函數：PM2.5 趨勢圖 ---
+const createPm25TrendOptions = (readings) => {
+    const displayReadings = readings.slice(-15); 
+    const timestamps = displayReadings.map(r => 
+        r.timestamp ? new Date(r.timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '載入中...'
+    );
+    const pm25Values = displayReadings.map(r => r.periodic?.AQI || r.value || 0);
+    const locations = displayReadings.map(r => r.nodeId || 'N/A');
+
+    return {
+        grid: { top: '10%', left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        tooltip: {
+            trigger: 'axis',
+            formatter: function (params) {
+                const data = params[0];
+                const index = data.dataIndex;
+                const locationsText = locations[index] || 'N/A';
+                let tooltip = `時間: ${data.name}<br/>`;
+                tooltip += `節點: ${locationsText}<br/>`;
+                tooltip += `<span style="display:inline-block;margin-right:4px;border-radius:10px;width:10px;height:10px;background-color:${data.color};"></span>AQI: <strong>${data.value}</strong>`;
+                return tooltip;
+            }
+        },
+        xAxis: {
+            type: 'category',
+            data: timestamps,
+            name: '上傳時間',
+            axisLabel: { color: '#9CA3AF' }
+        },
+        yAxis: {
+            type: 'value',
+            name: 'AQI',
+            min: 0,
+            max: 100, 
+            splitLine: { lineStyle: { color: '#374151' } },
+            axisLabel: { color: '#9CA3AF' }
+        },
+        series: [
+            {
+                name: 'AQI 數值',
+                type: 'line',
+                smooth: true,
+                data: pm25Values,
+                lineStyle: { color: '#34D399' },
+                itemStyle: { color: '#34D399' },
+                areaStyle: {
+                    opacity: 0.8,
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: '#34D399' },
+                        { offset: 1, color: '#1F2937' }
+                    ])
+                }
+            }
+        ]
+    };
+};
+
+// --- ECharts 選項生成函數：溫度與濕度比較圖 ---
+const createTempHumidityOptions = (readings) => {
+    const displayReadings = readings.slice(-10);
+    const timestamps = displayReadings.map(r => 
+        r.timestamp ? new Date(r.timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '載入中...'
+    );
+    const tempValues = displayReadings.map(r => r.periodic?.temperature || r.value || 0);
+    const humidityValues = displayReadings.map(r => r.periodic?.humidity || 0);
+
+    return {
+        grid: { top: '15%', left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        tooltip: { trigger: 'axis' },
+        legend: {
+            data: ['溫度 (°C)', '濕度 (%)'],
+            textStyle: { color: '#E5E7EB' }
+        },
+        xAxis: {
+            type: 'category',
+            data: timestamps,
+            name: '時間',
+            axisLabel: { color: '#9CA3AF' }
+        },
+        yAxis: [
+            {
+                type: 'value',
+                name: '溫度 (°C)',
+                min: 0,
+                max: 40,
+                axisLabel: { formatter: '{value} °C', color: '#F87171' },
+                splitLine: { lineStyle: { color: '#374151' } }
+            },
+            {
+                type: 'value',
+                name: '濕度 (%)',
+                min: 0,
+                max: 100,
+                axisLabel: { formatter: '{value} %', color: '#60A5FA' },
+                splitLine: { show: false }
+            }
+        ],
+        series: [
+            {
+                name: '溫度 (°C)',
+                type: 'bar',
+                data: tempValues,
+                itemStyle: { color: '#F87171' }
+            },
+            {
+                name: '濕度 (%)',
+                type: 'line',
+                yAxisIndex: 1,
+                data: humidityValues,
+                itemStyle: { color: '#60A5FA' },
+                lineStyle: { color: '#60A5FA' }
+            }
+        ]
+    };
+};
+
+// --- ECharts 選項生成函數：氣壓趨勢圖 ---
+const createPressureTrendOptions = (readings) => {
+    const displayReadings = readings.slice(-15);
+    const timestamps = displayReadings.map(r => 
+        r.timestamp ? new Date(r.timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '載入中...'
+    );
+    const pressureValues = displayReadings.map(r => r.periodic?.pressure || 0);
+
+    return {
+        grid: { top: '10%', left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        tooltip: { trigger: 'axis' },
+        xAxis: {
+            type: 'category',
+            data: timestamps,
+            name: '時間',
+            axisLabel: { color: '#9CA3AF' }
+        },
+        yAxis: {
+            type: 'value',
+            name: '氣壓 (hPa)',
+            min: 980, 
+            max: 1040, 
+            axisLabel: { formatter: '{value} hPa', color: '#C084FC' },
+            splitLine: { lineStyle: { color: '#374151' } }
+        },
+        series: [
+            {
+                name: '氣壓數值',
+                type: 'line',
+                smooth: true,
+                data: pressureValues,
+                lineStyle: { color: '#C084FC', width: 3 },
+                itemStyle: { color: '#C084FC' },
+                areaStyle: {
+                    opacity: 0.8,
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(192, 132, 252, 0.5)' },
+                        { offset: 1, color: 'rgba(31, 41, 55, 0.1)' }
+                    ])
+                }
+            }
+        ]
+    };
+};
+
+// --- ECharts 選項生成函數：噪音趨勢圖 ---
+const createNoiseTrendOptions = (readings) => {
+    const displayReadings = readings.slice(-15); 
+    const timestamps = displayReadings.map(r => 
+        r.timestamp ? new Date(r.timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '載入中...'
+    );
+    const noiseValues = displayReadings.map(r => r.periodic?.noise || 0);
+
+    return {
+        grid: { top: '10%', left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        tooltip: { trigger: 'axis' },
+        xAxis: {
+            type: 'category',
+            data: timestamps,
+            name: '時間',
+            axisLabel: { color: '#9CA3AF' }
+        },
+        yAxis: {
+            type: 'value',
+            name: '噪音等級 (dB)',
+            min: 30, 
+            max: 80, 
+            axisLabel: { formatter: '{value} dB', color: '#F472B6' },
+            splitLine: { lineStyle: { color: '#374151' } }
+        },
+        series: [
+            {
+                name: '噪音數值',
+                type: 'line',
+                smooth: true,
+                data: noiseValues,
+                lineStyle: { color: '#F472B6', width: 3 },
+                itemStyle: { color: '#F472B6' },
+                areaStyle: {
+                    opacity: 0.8,
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(244, 114, 182, 0.5)' },
+                        { offset: 1, color: 'rgba(31, 41, 55, 0.1)' }
+                    ])
+                }
+            }
+        ]
+    };
+};
+
+// --- ECharts 選項生成函數：風速與風向圖 ---
+const createWindOptions = (readings) => {
+    const displayReadings = readings.slice(-10);
+    const timestamps = displayReadings.map(r => 
+        r.timestamp ? new Date(r.timestamp).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '載入中...'
+    );
+    const windSpeedValues = displayReadings.map(r => r.periodic?.wind_speed || 0);
+    const windDirectionData = displayReadings.map((r, index) => ({
+        value: [timestamps[index], windSpeedValues[index]], 
+        symbolSize: 0,
+        label: {
+            show: true,
+            position: 'top',
+            formatter: r.periodic?.wind_dir || 'N/A',
+            color: '#F97316',
+            fontWeight: 'bold',
+            fontSize: 12,
+            offset: [0, -15]
+        }
+    }));
+
+    return {
+        grid: { top: '20%', left: '3%', right: '4%', bottom: '3%', containLabel: true },
+        tooltip: { 
+            trigger: 'axis',
+            formatter: function (params) {
+                const speedData = params.find(p => p.seriesName === '風速 (km/h)');
+                const directionData = displayReadings[speedData.dataIndex]?.periodic?.wind_dir || 'N/A';
+                return `時間: ${speedData.name}<br/>` + 
+                       `<span style="display:inline-block;margin-right:4px;border-radius:10px;width:10px;height:10px;background-color:${speedData.color};"></span>` +
+                       `風速: <strong>${speedData.value} km/h</strong><br/>` + 
+                       `風向: <strong>${directionData}</strong>`;
+            }
+        },
+        legend: {
+            data: ['風速 (km/h)', '風向'],
+            textStyle: { color: '#E5E7EB' }
+        },
+        xAxis: {
+            type: 'category',
+            data: timestamps,
+            name: '時間',
+            axisLabel: { color: '#9CA3AF' }
+        },
+        yAxis: {
+            type: 'value',
+            name: '風速 (km/h)',
+            min: 0,
+            max: 30, 
+            axisLabel: { formatter: '{value} km/h', color: '#F97316' }, 
+            splitLine: { lineStyle: { color: '#374151' } }
+        },
+        series: [
+            {
+                name: '風速 (km/h)',
+                type: 'bar',
+                data: windSpeedValues,
+                itemStyle: { color: '#F97316' }
+            },
+            {
+                name: '風向',
+                type: 'scatter', 
+                yAxisIndex: 0, 
+                data: windDirectionData,
+                itemStyle: { color: '#F97316' }
+            }
+        ]
+    };
+};
+
+// --- 感測器上傳模態框 ---
+const SensorUploaderModal = ({ isOpen, onClose, onUpload }) => {
+    const [nodeId, setNodeId] = useState('S-001');
+    const [temp, setTemp] = useState('25.0');
+    const [humidity, setHumidity] = useState('65.0');
+    const [aqi, setAqi] = useState(45);
+    const [rainProb, setRainProb] = useState('0.3');
+    const [windSpeed, setWindSpeed] = useState('5.2');
+    const [windDirection, setWindDirection] = useState('E');
+    const [pressure, setPressure] = useState('1013.5');
+    const [noise, setNoise] = useState('55');
+    const [battery, setBattery] = useState(75);
+    const [dataImportance, setDataImportance] = useState((5 + Math.random() * 5).toFixed(1));
+
+    if (!isOpen) return null;
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        
+        const payload = {
+            nodeId,
+            dataImportance: parseFloat(dataImportance),
+            battery,
+            timestamp: new Date().toISOString(),
+            networkStatus: 'good',
+            sensorType: 'temperature',
+            value: parseFloat(temp),
+            unit: 'celsius',
+            periodic: {
+                temperature: parseFloat(temp),
+                humidity: parseFloat(humidity),
+                rain_prob: parseFloat(rainProb),
+                wind_speed: parseFloat(windSpeed),
+                wind_dir: windDirection,
+                pressure: parseFloat(pressure),
+                AQI: aqi,
+                noise: parseFloat(noise),
+                traffic: 'MEDIUM',
+                notice: 'none'
+            },
+            metadata: {
+                personal_id: crypto.randomUUID(),
+                scenario_id: 'manual',
+                send_unix: Date.now() / 1000
+            }
+        };
+
+        await onUpload(payload);
+        onClose();
+    };
+    
+    const generateRandomData = () => {
+        setNodeId(`S-${String(Math.floor(Math.random() * 100)).padStart(3, '0')}`);
+        setTemp((20 + Math.random() * 15).toFixed(1));
+        setHumidity((45 + Math.random() * 35).toFixed(1));
+        setAqi(Math.floor(Math.random() * 80) + 5);
+        setRainProb((Math.random()).toFixed(2));
+        setWindSpeed((0 + Math.random() * 30).toFixed(1));
+        setWindDirection(['E', 'S', 'W', 'N', 'SE', 'NE', 'SW', 'NW'][Math.floor(Math.random() * 8)]);
+        setPressure((980 + Math.random() * 50).toFixed(1));
+        setNoise((30 + Math.random() * 50).toFixed(1));
+        setBattery(Math.floor(Math.random() * 100));
+        setDataImportance((Math.random() * 10).toFixed(1));
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-6 border-b border-gray-700">
+                    <h2 className="text-2xl font-bold text-indigo-400">模擬上傳感測器數據</h2>
+                    <p className="text-gray-400 text-sm mt-1">填寫感測器數據並上傳到後端 API</p>
+                </div>
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">節點 ID</label>
+                            <input type="text" value={nodeId} onChange={(e) => setNodeId(e.target.value)} className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white" required />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">資料重要性 (0-10)</label>
+                            <input type="number" min="0" max="10" step="0.1" value={dataImportance} onChange={(e) => setDataImportance(e.target.value)} className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white" required />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">電量 (0-100)</label>
+                            <input type="number" min="0" max="100" value={battery} onChange={(e) => setBattery(parseInt(e.target.value))} className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white" required />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">溫度 (°C)</label>
+                            <input type="number" step="0.1" value={temp} onChange={(e) => setTemp(e.target.value)} className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white" required />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">濕度 (%)</label>
+                            <input type="number" step="0.1" value={humidity} onChange={(e) => setHumidity(e.target.value)} className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white" required />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">AQI</label>
+                            <input type="number" value={aqi} onChange={(e) => setAqi(parseInt(e.target.value))} className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white" required />
+                        </div>
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                        <button type="button" onClick={generateRandomData} className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500">
+                            🎲 隨機生成
+                        </button>
+                        <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">
+                            📡 上傳數據到後端
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+// --- 主應用程式元件 ---
+const App = () => {
+    const [readings, setReadings] = useState([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [loadingError, setLoadingError] = useState(null);
+    const [isConnected, setIsConnected] = useState(false);
+
+    // 檢查後端連接
+    useEffect(() => {
+        const checkConnection = async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`);
+                if (response.ok) {
+                    setIsConnected(true);
+                    setLoadingError(null);
+                } else {
+                    setIsConnected(false);
+                    setLoadingError(`後端伺服器回應錯誤: ${response.status}`);
+                }
+            } catch (error) {
+                setIsConnected(false);
+                setLoadingError(`無法連接到後端伺服器 (${API_BASE_URL})。請確認後端伺服器已啟動：在專案根目錄執行 "npm start"`);
+            }
+        };
+
+        checkConnection();
+        const interval = setInterval(checkConnection, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // 載入數據（從後端 API）
+    useEffect(() => {
+        if (!isConnected) return;
+
+        const loadData = async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/sensors/data?limit=20&sortBy=timestamp`);
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success) {
+                        setReadings(result.data || []);
+                        setLoadingError(null);
+                    }
+                } else {
+                    setLoadingError(`載入數據失敗: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('載入數據失敗:', error);
+                setLoadingError(`載入數據錯誤: ${error.message}`);
+            }
+        };
+
+        loadData();
+        const interval = setInterval(loadData, 5000);
+        return () => clearInterval(interval);
+    }, [isConnected]);
+
+    // 上傳數據（發送到後端 API）
+    const handleUpload = async (sensorData) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/sensors/data`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(sensorData)
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                console.log('數據上傳成功!', result.data);
+                setLoadingError(null);
+                // 重新載入數據
+                const dataResponse = await fetch(`${API_BASE_URL}/api/sensors/data?limit=20&sortBy=timestamp`);
+                const dataResult = await dataResponse.json();
+                if (dataResult.success) {
+                    setReadings(dataResult.data || []);
+                }
+            } else {
+                setLoadingError(`上傳失敗: ${result.error?.message || '未知錯誤'}`);
+            }
+        } catch (error) {
+            console.error('數據上傳失敗:', error);
+            setLoadingError(`上傳錯誤: ${error.message}`);
+        }
+    };
+
+    // 渲染相關 ECharts
+    const pm25Options = createPm25TrendOptions(readings);
+    const tempHumidityOptions = createTempHumidityOptions(readings);
+    const pressureOptions = createPressureTrendOptions(readings);
+    const noiseOptions = createNoiseTrendOptions(readings);
+    const windOptions = createWindOptions(readings);
+
+    const latestReading = readings.length > 0 ? readings[readings.length - 1] : {};
+
+    // --- UI 渲染 ---
+    return (
+        <div className="min-h-screen bg-gray-900 text-gray-100 p-4 sm:p-8 font-sans">
+            <header className="mb-6">
+                <h1 className="text-3xl sm:text-4xl font-extrabold text-indigo-400 mb-2">
+                    社區感測器資料上傳平台
+                </h1>
+                <p className="text-gray-400">
+                    即時環境數據監測 ({isConnected ? '✅ 已連接後端' : '❌ 未連接後端'})
+                </p>
+            </header>
+
+            {loadingError && (
+                <div className={`${loadingError.includes('錯誤') ? 'bg-red-900/40 text-red-300 border-red-600' : 'bg-yellow-900/40 text-yellow-300 border-yellow-600'} p-4 rounded-lg mb-6 border`}>
+                    {loadingError}
+                </div>
+            )}
+
+            <div className="mb-8">
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg transition duration-300 hover:bg-indigo-500"
+                >
+                    + 模擬上傳感測器數據
+                </button>
+            </div>
+
+            {/* 數據總覽卡片 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
+                <div className="bg-gray-800 p-5 rounded-xl shadow-xl border-t-4 border-indigo-500">
+                    <h3 className="text-sm font-medium text-gray-400 uppercase">溫度</h3>
+                    <p className="text-3xl font-extrabold mt-1 text-indigo-400">
+                        {latestReading.periodic?.temperature || latestReading.value || 'N/A'}
+                        <span className="text-base font-normal ml-1 text-gray-400">°C</span>
+                    </p>
+                </div>
+                <div className="bg-gray-800 p-5 rounded-xl shadow-xl border-t-4 border-blue-500">
+                    <h3 className="text-sm font-medium text-gray-400 uppercase">濕度</h3>
+                    <p className="text-3xl font-extrabold mt-1 text-blue-400">
+                        {latestReading.periodic?.humidity || 'N/A'}
+                        <span className="text-base font-normal ml-1 text-gray-400">%</span>
+                    </p>
+                </div>
+                <div className="bg-gray-800 p-5 rounded-xl shadow-xl border-t-4 border-green-500">
+                    <h3 className="text-sm font-medium text-gray-400 uppercase">AQI</h3>
+                    <p className="text-3xl font-extrabold mt-1 text-green-400">
+                        {latestReading.periodic?.AQI || 'N/A'}
+                    </p>
+                </div>
+                <div className="bg-gray-800 p-5 rounded-xl shadow-xl border-t-4 border-purple-500">
+                    <h3 className="text-sm font-medium text-gray-400 uppercase">氣壓</h3>
+                    <p className="text-3xl font-extrabold mt-1 text-purple-400">
+                        {latestReading.periodic?.pressure || 'N/A'}
+                        <span className="text-base font-normal ml-1 text-gray-400">hPa</span>
+                    </p>
+                </div>
+                <div className="bg-gray-800 p-5 rounded-xl shadow-xl border-t-4 border-pink-500">
+                    <h3 className="text-sm font-medium text-gray-400 uppercase">優先級</h3>
+                    <p className="text-3xl font-extrabold mt-1 text-pink-400">
+                        {latestReading.priority?.priorityScore?.toFixed(1) || 'N/A'}
+                        <span className="text-base font-normal ml-1 text-gray-400">({latestReading.priority?.priorityLevel || 'N/A'})</span>
+                    </p>
+                </div>
+            </div>
+
+            {/* 圖表 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
+                    <h2 className="text-xl font-bold text-indigo-400 mb-4">AQI 趨勢</h2>
+                    <div ref={useEcharts(pm25Options, 'pm25-chart')} style={{ width: '100%', height: '300px' }}></div>
+                </div>
+                <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
+                    <h2 className="text-xl font-bold text-indigo-400 mb-4">溫度與濕度</h2>
+                    <div ref={useEcharts(tempHumidityOptions, 'temp-humidity-chart')} style={{ width: '100%', height: '300px' }}></div>
+                </div>
+                <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
+                    <h2 className="text-xl font-bold text-indigo-400 mb-4">氣壓趨勢</h2>
+                    <div ref={useEcharts(pressureOptions, 'pressure-chart')} style={{ width: '100%', height: '300px' }}></div>
+                </div>
+                <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
+                    <h2 className="text-xl font-bold text-indigo-400 mb-4">噪音趨勢</h2>
+                    <div ref={useEcharts(noiseOptions, 'noise-chart')} style={{ width: '100%', height: '300px' }}></div>
+                </div>
+                <div className="bg-gray-800 p-6 rounded-xl shadow-xl lg:col-span-2">
+                    <h2 className="text-xl font-bold text-indigo-400 mb-4">風速與風向</h2>
+                    <div ref={useEcharts(windOptions, 'wind-chart')} style={{ width: '100%', height: '300px' }}></div>
+                </div>
+            </div>
+
+            {/* 數據列表 */}
+            <div className="bg-gray-800 p-6 rounded-xl shadow-xl mb-8">
+                <h2 className="text-xl font-bold text-indigo-400 mb-4">最新數據列表</h2>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-b border-gray-700">
+                                <th className="text-left p-2">節點 ID</th>
+                                <th className="text-left p-2">優先級</th>
+                                <th className="text-left p-2">溫度</th>
+                                <th className="text-left p-2">濕度</th>
+                                <th className="text-left p-2">電量</th>
+                                <th className="text-left p-2">時間</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {readings.slice(0, 10).map((reading, index) => (
+                                <tr key={reading.id || index} className="border-b border-gray-700">
+                                    <td className="p-2">{reading.nodeId}</td>
+                                    <td className="p-2">
+                                        {reading.priority?.priorityScore?.toFixed(1)} ({reading.priority?.priorityLevel})
+                                    </td>
+                                    <td className="p-2">{reading.periodic?.temperature || reading.value || 'N/A'}°C</td>
+                                    <td className="p-2">{reading.periodic?.humidity || 'N/A'}%</td>
+                                    <td className="p-2">{reading.battery || 'N/A'}%</td>
+                                    <td className="p-2">{reading.timestamp ? new Date(reading.timestamp).toLocaleString('zh-TW') : 'N/A'}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <footer className="mt-12 text-center text-gray-600 border-t border-gray-800 pt-6">
+                <p>社區感測器資料上傳平台 - 連接後端 API (優先級引擎已啟用)</p>
+            </footer>
+
+            {/* 模態框 */}
+            <SensorUploaderModal 
+                isOpen={isModalOpen} 
+                onClose={() => setIsModalOpen(false)} 
+                onUpload={handleUpload} 
+            />
+        </div>
+    );
+};
+
+export default App;
+
