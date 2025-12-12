@@ -515,17 +515,23 @@ const App = () => {
             }
 
             try {
+                // 添加時間戳參數避免瀏覽器和 HTTP 快取
+                const timestamp = Date.now();
                 const [dataResponse, summaryResponse] = await Promise.all([
-                    fetch(`${API_BASE_URL}/api/sensors/data?sortBy=timestamp&limit=20`, {
+                    fetch(`${API_BASE_URL}/api/sensors/data?sortBy=timestamp&limit=20&_t=${timestamp}`, {
                         method: 'GET',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache'
                         }
                     }),
-                    fetch(`${API_BASE_URL}/api/reports/summary`, {
+                    fetch(`${API_BASE_URL}/api/reports/summary?_t=${timestamp}`, {
                         method: 'GET',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache'
                         }
                     })
                 ]);
@@ -559,8 +565,11 @@ const App = () => {
             }
         };
 
+        // 立即載入一次
         loadData();
-        const interval = setInterval(loadData, 5000);
+        
+        // 每 2 秒輪詢一次（與後端快取 TTL 同步，確保即時更新）
+        const interval = setInterval(loadData, 2000);
         return () => clearInterval(interval);
     }, [isConnected]);
 
@@ -579,11 +588,21 @@ const App = () => {
             if (result.success) {
                 console.log('數據上傳成功!', result.data);
                 setLoadingError(null);
-                // 重新載入數據
-                const dataResponse = await fetch(`${API_BASE_URL}/api/sensors/data?sortBy=timestamp&limit=20`);
+                
+                // 立即重新載入數據（添加強制刷新參數，繞過所有快取）
+                const refreshTimestamp = Date.now();
+                const dataResponse = await fetch(`${API_BASE_URL}/api/sensors/data?sortBy=timestamp&limit=20&_t=${refreshTimestamp}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache'
+                    }
+                });
                 const dataResult = await dataResponse.json();
                 if (dataResult.success) {
                     setReadings(dataResult.data || []);
+                    console.log('數據已立即更新，筆數:', dataResult.data.length);
                 }
             } else {
                 setLoadingError(`上傳失敗: ${result.error?.message || '未知錯誤'}`);
@@ -614,7 +633,7 @@ const App = () => {
                 </p>
                 {summary && (
                     <p className="text-xs text-gray-500 mt-1">
-                        總數據數: {summary.totalRecords} | 節點數: {summary.uniqueNodes} | 平均電量: {summary.averageBattery}%
+                        總數據數: {summary ? summary.totalRecords : '0'} | 節點數: {summary.uniqueNodes} | 平均電量: {summary.averageBattery}%
                     </p>
                 )}
             </header>
@@ -706,13 +725,7 @@ const App = () => {
                     color={latestReading.battery > 50 ? 'text-green-400' : (latestReading.battery > 20 ? 'text-yellow-400' : 'text-red-400')} 
                     description={latestReading.nodeId || '無數據'} 
                 />
-                <DataCard 
-                    title="數據總筆數" 
-                    value={readings.length} 
-                    unit="筆" 
-                    color="text-indigo-400" 
-                    description="即時從後端讀取" 
-                />
+           
             </div>
 
             {/* 圖表網格 */}
