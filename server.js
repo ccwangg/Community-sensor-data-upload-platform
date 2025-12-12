@@ -6,6 +6,7 @@ require('dotenv').config();
 const sensorRoutes = require('./routes/sensorRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const schedulerRoutes = require('./routes/schedulerRoutes');
+const databaseRoutes = require('./routes/databaseRoutes');
 const { performanceMonitor, getPerformanceStats, resetStats } = require('./middleware/performanceMonitor');
 
 const app = express();
@@ -29,6 +30,7 @@ app.use((req, res, next) => {
 app.use('/api/sensors', sensorRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/scheduler', schedulerRoutes);
+app.use('/api/database', databaseRoutes);
 
 // 根路徑
 app.get('/', (req, res) => {
@@ -53,6 +55,10 @@ app.get('/', (req, res) => {
       },
       priority: {
         stats: 'GET /api/sensors/priority/stats'
+      },
+      database: {
+        stats: 'GET /api/database/stats',
+        clear: 'DELETE /api/database/clear'
       }
     }
   });

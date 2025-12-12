@@ -24,3 +24,9 @@ Thumbs.db
 # Test coverage
 coverage/
 
+# Database files
+data/
+*.db
+*.sqlite
+*.sqlite3
+

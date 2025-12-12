@@ -26,9 +26,12 @@ const PRIORITY_LEVELS = {
 };
 
 /**
- * 計算優先級分數（優化版本）
+ * 計算優先級分數（優化版本，使用公式）
+ * 
+ * 公式：PriorityScore = W_imp × Importance + W_bat × (100 - Battery)/10 + W_net × Network
  * 
  * 優化點：
+ * - 使用標準公式計算
  * - 減少不必要的計算
  * - 使用查表法加速網路狀態分數查詢
  * - 簡化數學運算
@@ -43,24 +46,29 @@ const PRIORITY_LEVELS = {
 function calculatePriority(sensorData, includeBreakdown = false) {
   const { dataImportance, battery, networkStatus = 'unknown' } = sensorData;
 
-  // 優化：直接計算，減少函數調用
+  // 權重配置
+  const W_imp = 0.5;  // 資料重要性權重
+  const W_bat = 0.3;  // 電量權重（電越少越急）
+  const W_net = 0.2;  // 網路狀況權重
+
   // 1. 資料重要性分數 (0-10) - 權重 0.5
   const importanceScore = Math.max(0, Math.min(10, dataImportance));
-  const weightedImportance = importanceScore * 0.5;
+  const weightedImportance = importanceScore * W_imp;
 
   // 2. 節點狀態分數 (電量) - 權重 0.3
-  // 優化：直接計算，避免函數調用開銷
+  // 公式：電越少越急，所以用 (100 - Battery) / 10 轉換為 0-10 分數
   const normalizedBattery = Math.max(0, Math.min(100, battery));
-  const batteryScore = 10 * Math.pow(1 - normalizedBattery / 100, 0.7);
-  const weightedBattery = Math.max(0, Math.min(10, batteryScore)) * 0.3;
+  const batteryScore = (100 - normalizedBattery) / 10; // 轉換為 0-10 範圍
+  const weightedBattery = batteryScore * W_bat;
 
   // 3. 網路狀況分數 - 權重 0.2
   // 優化：使用查表法，避免 toLowerCase() 和條件判斷
   const networkKey = networkStatus.toLowerCase();
   const networkScore = NETWORK_STATUS_SCORE[networkKey] ?? NETWORK_STATUS_SCORE['unknown'];
-  const weightedNetwork = networkScore * 0.2;
+  const weightedNetwork = networkScore * W_net;
 
   // 計算總分 (0-10)
+  // PriorityScore = W_imp × Importance + W_bat × (100 - Battery)/10 + W_net × Network
   const totalScore = weightedImportance + weightedBattery + weightedNetwork;
   const roundedScore = Math.round(totalScore * 100) / 100;
 

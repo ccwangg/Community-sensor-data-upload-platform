@@ -25,6 +25,7 @@
 - **後端**: Node.js + Express
 - **前端**: React + Vite + ECharts
 - **模擬器**: Python
+- **資料庫**: JSON 檔案持久化（lowdb 風格）
 - **效能優化**: 快取機制、非同步處理、演算法優化
 
 ---
@@ -42,6 +43,13 @@
                     │  優先級引擎     │
                     │  上傳調度器     │
                     │  快取服務       │
+                    │  資料庫服務     │
+                    └─────────────────┘
+                              │
+                              ▼
+                    ┌─────────────────┐
+                    │  data/          │
+                    │  sensor-data.json│
                     └─────────────────┘
 ```
 
@@ -629,6 +637,88 @@ curl http://localhost:3000/api/performance/stats
 
 ---
 
+## 系統修復說明
+
+### ✅ 已修復的問題
+
+#### 1. 資料庫持久化（解決「金魚腦」問題）
+
+**問題：** 使用記憶體陣列，重啟後資料全部消失
+
+**解決方案：**
+- ✅ 實作 `services/databaseService.js` 使用 JSON 檔案持久化
+- ✅ 資料儲存在 `data/sensor-data.json`
+- ✅ 重啟伺服器後資料不會消失
+
+**驗證方式：**
+```bash
+# 1. 上傳數據
+python tests/simulator_backend.py --sensors 3 --messages 5
+
+# 2. 重啟伺服器
+# 停止伺服器（Ctrl+C），然後重新啟動
+
+# 3. 查詢數據（應該還在）
+curl http://localhost:3000/api/sensors/data
+```
+
+#### 2. 真正的優先級佇列（解決「VIP 通道是假的」問題）
+
+**問題：** 雖然計算了優先級，但儲存時只是簡單 `push()`，沒有按優先級排序
+
+**解決方案：**
+- ✅ 資料庫服務在插入時按 `PriorityScore` 降序排序
+- ✅ 高優先級數據自動插入到前面
+- ✅ 使用公式：`PriorityScore = W_imp × Importance + W_bat × (100 - Battery)/10 + W_net × Network`
+
+**驗證方式：**
+```bash
+# 上傳不同優先級的數據
+curl -X POST http://localhost:3000/api/sensors/data \
+  -H "Content-Type: application/json" \
+  -d '{"nodeId":"S-HIGH","dataImportance":9,"battery":10,"networkStatus":"good"}'
+
+curl -X POST http://localhost:3000/api/sensors/data \
+  -H "Content-Type: application/json" \
+  -d '{"nodeId":"S-LOW","dataImportance":2,"battery":90,"networkStatus":"excellent"}'
+
+# 查詢數據（應該按優先級排序）
+curl "http://localhost:3000/api/sensors/data?sortBy=priority"
+# 第一個應該是 S-HIGH（高優先級）
+```
+
+#### 3. 前端後端連接（已解決）
+
+**問題：** 前端連 Firebase，後端用記憶體，兩者沒連接
+
+**現狀：** ✅ 已解決
+- 前端 `App.jsx` 已改為連接後端 API
+- 沒有 Firebase 相關代碼
+- 前端使用 `fetch()` 從後端獲取數據
+
+#### 4. 模擬器真實發送（已解決）
+
+**問題：** 舊的 `simulator.py` 只是假發送
+
+**現狀：** ✅ 已解決
+- `simulator_backend.py` 使用 `requests.post()` 真實發送 HTTP 請求
+- 連接到 `http://localhost:3000/api/sensors/data`
+
+### 資料庫 API
+
+- `GET /api/database/stats` - 獲取資料庫統計
+- `DELETE /api/database/clear` - 清空資料庫（僅用於測試）
+
+### 資料庫檔案
+
+- **位置**: `data/sensor-data.json`
+- **格式**: JSON
+- **自動備份**: 建議定期備份 `data/` 目錄
+
+詳細說明請查看 [修復總結](docs/fixes-summary.md)
+
+---
+
 ## 故障排除
 
 ### 常見問題
@@ -843,12 +933,24 @@ server {
 
 ---
 
+## 系統修復說明
+
+### 已修復的問題
+
+1. **✅ 資料庫持久化** - 使用 JSON 檔案取代記憶體儲存，重啟後資料不會消失
+2. **✅ 真正的優先級佇列** - 數據按 PriorityScore 降序插入，高優先級數據優先處理
+3. **✅ 前端後端連接** - 前端已連接後端 API，不再使用 Firebase
+4. **✅ 模擬器真實發送** - 模擬器使用 requests 真實發送 HTTP 請求
+
+詳細說明請查看 [修復總結](docs/fixes-summary.md)
+
 ## 相關文檔
 
 - [API 規範](docs/api-specification.md) - 詳細的 API 格式規範
 - [連接指南](docs/connection-guide.md) - 前端、模擬器、後端連接說明
 - [模擬器使用指南](docs/simulator-guide.md) - 模擬器詳細使用說明
 - [效能優化文檔](docs/performance-optimization.md) - 效能優化詳細說明
+- [修復總結](docs/fixes-summary.md) - 系統修復詳細說明
 
 ---
 
