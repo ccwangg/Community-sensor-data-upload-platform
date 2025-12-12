@@ -1,3 +1,21 @@
+/**
+ * ⚠️ 已棄用 (DEPRECATED) ⚠️
+ * 
+ * 此檔案為舊版前端，使用 Firebase 直接連接，不符合簡報架構要求。
+ * 
+ * 問題：
+ * - 直接連接 Firebase，繞過後端 API
+ * - 沒有經過優先級引擎處理
+ * - 不符合簡報第 4 頁的架構圖
+ * 
+ * 請使用 frontend/src/App.jsx 作為主要前端：
+ * - 從後端 API 讀取數據
+ * - 上傳數據到後端 API
+ * - 符合簡報架構要求
+ * 
+ * 此檔案保留僅供參考，不建議使用。
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import * as echarts from 'echarts';
 

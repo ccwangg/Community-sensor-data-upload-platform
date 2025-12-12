@@ -1,3 +1,21 @@
+"""
+⚠️ 已棄用 (DEPRECATED) ⚠️
+
+此檔案為舊版模擬器，不符合簡報架構要求。
+
+問題：
+- 使用 fakeSend() 函式，只寫入 CSV 檔案
+- 沒有發送 HTTP POST 請求到後端 API
+- 欄位名稱不統一（使用 sensor_id, priority_hint 而非 nodeId, dataImportance）
+
+請使用 tests/simulator_backend.py 作為主要模擬器：
+- 正確發送 HTTP POST 到後端 API
+- 使用統一的 JSON 格式
+- 符合簡報架構要求
+
+此檔案保留僅供參考，不建議使用。
+"""
+
 import time, uuid, csv, random, os, json
 from datetime import datetime, timezone
 
