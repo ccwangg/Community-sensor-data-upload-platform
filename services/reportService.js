@@ -13,15 +13,16 @@ const getSummary = async () => {
     return cached;
   }
 
-  const allData = await sensorService.getAllSensorData();
-  const data = allData.data;
-
-  if (data.length === 0) {
+  // 直接從資料庫獲取所有數據（不使用快取，確保獲取最新數據）
+  const databaseService = require('./databaseService');
+  const allData = databaseService.getAllData();
+  
+  if (allData.length === 0) {
     const result = {
       totalRecords: 0,
       message: '目前尚無數據'
     };
-    cacheService.set(cacheKey, result, 60 * 1000);
+    cacheService.set(cacheKey, result, 2 * 1000); // 縮短快取時間
     return result;
   }
 
@@ -33,7 +34,7 @@ const getSummary = async () => {
   const networkStatus = {};
   let latestTimestamp = null;
 
-  for (const d of data) {
+  for (const d of allData) {
     uniqueNodes.add(d.nodeId);
     sensorTypes[d.sensorType] = (sensorTypes[d.sensorType] || 0) + 1;
     totalBattery += d.battery;
@@ -46,19 +47,19 @@ const getSummary = async () => {
   }
 
   const result = {
-    totalRecords: data.length,
+    totalRecords: allData.length,
     uniqueNodes: uniqueNodes.size,
     nodeList: Array.from(uniqueNodes),
     sensorTypes,
-    averageBattery: Math.round((totalBattery / data.length) * 100) / 100,
-    averageImportance: Math.round((totalImportance / data.length) * 100) / 100,
+    averageBattery: Math.round((totalBattery / allData.length) * 100) / 100,
+    averageImportance: Math.round((totalImportance / allData.length) * 100) / 100,
     networkStatus,
     latestTimestamp,
     generatedAt: new Date().toISOString()
   };
 
-  // 存入快取（TTL: 30 秒）
-  cacheService.set(cacheKey, result, 30 * 1000);
+  // 存入快取（TTL: 2 秒，確保總筆數能即時更新）
+  cacheService.set(cacheKey, result, 2 * 1000);
 
   return result;
 };
@@ -67,8 +68,9 @@ const getSummary = async () => {
  * 獲取統計數據報表
  */
 const getStatistics = async (timeRange = 'all') => {
-  const allData = await sensorService.getAllSensorData();
-  let data = allData.data;
+  // 直接從資料庫獲取所有數據（不使用快取，確保獲取最新數據）
+  const databaseService = require('./databaseService');
+  let data = databaseService.getAllData();
 
   // 根據時間範圍篩選
   const now = new Date();

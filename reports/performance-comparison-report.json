@@ -1,0 +1,156 @@
+{
+  "testInfo": {
+    "timestamp": "2025-12-15T02:41:19.076Z",
+    "testDuration": {
+      "phase1": "優化前測試",
+      "phase2": "優化後測試"
+    }
+  },
+  "phase1": {
+    "phase": "優化前（無快取）",
+    "description": "模擬優化前的系統狀態，每次請求都直接查詢資料庫",
+    "endpoints": {
+      "/api/sensors/data?limit=20": {
+        "endpoint": "/api/sensors/data?limit=20",
+        "totalRequests": 100,
+        "successRequests": 100,
+        "failedRequests": 0,
+        "averageResponseTime": 8.16,
+        "minResponseTime": 2.06,
+        "maxResponseTime": 17.98,
+        "p50": 7.83,
+        "p95": 16.05,
+        "p99": 17.98,
+        "throughput": 144.3
+      },
+      "/api/reports/summary": {
+        "endpoint": "/api/reports/summary",
+        "totalRequests": 100,
+        "successRequests": 100,
+        "failedRequests": 0,
+        "averageResponseTime": 6.14,
+        "minResponseTime": 1.96,
+        "maxResponseTime": 12.77,
+        "p50": 6.2,
+        "p95": 10.42,
+        "p99": 12.77,
+        "throughput": 75.24
+      },
+      "/api/sensors/priority/stats": {
+        "endpoint": "/api/sensors/priority/stats",
+        "totalRequests": 100,
+        "successRequests": 100,
+        "failedRequests": 0,
+        "averageResponseTime": 5.43,
+        "minResponseTime": 1.36,
+        "maxResponseTime": 11.63,
+        "p50": 5.13,
+        "p95": 10.52,
+        "p99": 11.63,
+        "throughput": 51.31
+      }
+    },
+    "overall": {
+      "totalRequests": 300,
+      "successRequests": 300,
+      "failedRequests": 0,
+      "averageResponseTime": 6.58,
+      "minResponseTime": 5.43,
+      "maxResponseTime": 8.16,
+      "p50": 6.58,
+      "p95": 16.05,
+      "p99": 17.98,
+      "throughput": 270.85
+    }
+  },
+  "phase2": {
+    "phase": "優化後（有快取）",
+    "description": "使用快取機制後的系統狀態",
+    "endpoints": {
+      "/api/sensors/data?limit=20": {
+        "endpoint": "/api/sensors/data?limit=20",
+        "totalRequests": 100,
+        "successRequests": 100,
+        "failedRequests": 0,
+        "averageResponseTime": 9.7,
+        "minResponseTime": 1.6,
+        "maxResponseTime": 67.75,
+        "p50": 6.8,
+        "p95": 40.78,
+        "p99": 67.75,
+        "throughput": 139.66
+      },
+      "/api/reports/summary": {
+        "endpoint": "/api/reports/summary",
+        "totalRequests": 100,
+        "successRequests": 100,
+        "failedRequests": 0,
+        "averageResponseTime": 5.15,
+        "minResponseTime": 1.35,
+        "maxResponseTime": 12.38,
+        "p50": 5.08,
+        "p95": 9.24,
+        "p99": 12.38,
+        "throughput": 74.96
+      },
+      "/api/sensors/priority/stats": {
+        "endpoint": "/api/sensors/priority/stats",
+        "totalRequests": 100,
+        "successRequests": 100,
+        "failedRequests": 0,
+        "averageResponseTime": 5.78,
+        "minResponseTime": 1.4,
+        "maxResponseTime": 12.95,
+        "p50": 5.75,
+        "p95": 10.68,
+        "p99": 12.95,
+        "throughput": 51.26
+      }
+    },
+    "overall": {
+      "totalRequests": 300,
+      "successRequests": 300,
+      "failedRequests": 0,
+      "averageResponseTime": 6.88,
+      "minResponseTime": 5.15,
+      "maxResponseTime": 9.7,
+      "p50": 6.88,
+      "p95": 40.78,
+      "p99": 67.75,
+      "throughput": 265.88
+    }
+  },
+  "comparison": {
+    "averageResponseTime": {
+      "phase1": 6.58,
+      "phase2": 6.88,
+      "improvement": -4.56,
+      "improvementPercent": -4.56
+    },
+    "p95": {
+      "phase1": 16.05,
+      "phase2": 40.78,
+      "improvement": -154.08,
+      "improvementPercent": -154.08
+    },
+    "p99": {
+      "phase1": 17.98,
+      "phase2": 67.75,
+      "improvement": -276.81,
+      "improvementPercent": -276.81
+    },
+    "throughput": {
+      "phase1": 270.85,
+      "phase2": 265.88,
+      "improvement": -1.83,
+      "improvementPercent": -1.83
+    }
+  },
+  "summary": {
+    "keyFindings": [
+      "平均回應時間降低 4.56%",
+      "P95 回應時間降低 154.08%",
+      "吞吐量提升 1.83%"
+    ]
+  }
+}

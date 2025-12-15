@@ -24,8 +24,17 @@ const saveSensorData = async (sensorData) => {
     uploadScheduler.scheduleUpload(dataWithId);
   });
   
-  // 清除相關快取
-  cacheService.delete(cacheService.generateKey('sensors', {}));
+  // 清除所有相關快取（確保新數據能即時顯示）
+  // 清除所有可能的快取鍵組合，包括不同的查詢參數
+  const possibleKeys = [
+    cacheService.generateKey('sensors', {}),
+    cacheService.generateKey('sensors', { sortBy: 'timestamp' }),
+    cacheService.generateKey('sensors', { sortBy: 'priority' }),
+    cacheService.generateKey('sensors', { limit: 20 }),
+    cacheService.generateKey('sensors', { sortBy: 'timestamp', limit: 20 })
+  ];
+  
+  possibleKeys.forEach(key => cacheService.delete(key));
   cacheService.delete(cacheService.generateKey('summary', {}));
   cacheService.delete(cacheService.generateKey('priority_stats', {}));
   
@@ -48,8 +57,9 @@ const getAllSensorData = async (options = {}) => {
   // 快取未命中，從資料庫查詢
   const result = databaseService.getAllSensorData(options);
 
-  // 存入快取（TTL: 30 秒，因為數據會頻繁更新）
-  cacheService.set(cacheKey, result, 30 * 1000);
+  // 存入快取（TTL: 2 秒，確保前端能即時看到新數據）
+  // 較短的 TTL 可以平衡效能和即時性
+  cacheService.set(cacheKey, result, 2 * 1000);
 
   return result;
 };
@@ -113,8 +123,8 @@ const getPriorityStatistics = async () => {
     }
   };
 
-  // 存入快取（TTL: 30 秒）
-  cacheService.set(cacheKey, stats, 30 * 1000);
+  // 存入快取（TTL: 5 秒，統計數據更新頻率較低）
+  cacheService.set(cacheKey, stats, 5 * 1000);
 
   return stats;
 };

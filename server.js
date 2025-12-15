@@ -95,6 +95,16 @@ app.post('/api/performance/reset', (req, res) => {
   });
 });
 
+// 清除快取（用於性能測試）
+app.post('/api/cache/clear', (req, res) => {
+  const cacheService = require('./services/cacheService');
+  cacheService.clear();
+  res.json({
+    success: true,
+    message: '快取已清除'
+  });
+});
+
 // 錯誤處理中間件
 app.use((err, req, res, next) => {
   console.error('Error:', err);

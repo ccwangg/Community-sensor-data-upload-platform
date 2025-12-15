@@ -8,6 +8,8 @@
     "dev": "nodemon server.js",
     "test": "node tests/api.test.js",
     "test:performance": "node tests/performance-test.js",
+    "test:comparison": "node tests/performance-comparison.js",
+    "test:critical": "node tests/critical-data-delay-test.js",
     "test:fixes": "node test-fixes.js"
   },
   "keywords": [
